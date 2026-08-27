@@ -13,7 +13,16 @@ def _patched_torch_load(*args, **kwargs):
 
 torch.load = _patched_torch_load
 
-MODELS_DIR = Path("/app/models")
+# No container, ./models é montado em /app/models (docker-compose.yml). Fora do container
+# (ex.: pytest local), cai para o diretório models/ na raiz do repositório.
+_env_models_dir = os.getenv("MODELS_DIR")
+if _env_models_dir:
+    MODELS_DIR = Path(_env_models_dir)
+elif Path("/app/models").exists():
+    MODELS_DIR = Path("/app/models")
+else:
+    MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
+
 _cache: dict = {}
 
 def load_model(model_name: str) -> YOLO:
@@ -30,3 +39,4 @@ def load_model(model_name: str) -> YOLO:
 
 def get_default_model_name() -> str:
     return os.getenv("MODEL_NAME", "yolov8n.pt")
+
