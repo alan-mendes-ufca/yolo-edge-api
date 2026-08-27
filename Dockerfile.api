@@ -1,0 +1,30 @@
+FROM python:3.11-slim-bookworm
+
+# Instala dependências do sistema + repositório oficial da Raspberry Pi Foundation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgl1 libglib2.0-0 libgomp1 curl gnupg ca-certificates && \
+    curl -fsSL https://archive.raspberrypi.com/debian/raspberrypi.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/raspberrypi-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/raspberrypi-archive-keyring.gpg] https://archive.raspberrypi.com/debian/ bookworm main" \
+        > /etc/apt/sources.list.d/raspi.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends rpicam-apps-lite && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY app/requirements.txt .
+# PyTorch CPU-only: instalado antes do restante das dependências para evitar que o
+# resolver puxe o stack completo de CUDA (torch, nvidia-cudnn, nvidia-cublas, ...),
+# que não serve para nada numa Raspberry Pi sem GPU e infla a imagem em vários GB.
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ .
+
+EXPOSE 8000
+
+# Um único worker: necessário para que o lock de streaming e o cache
+# de modelos sejam realmente compartilhados entre todas as requisições
+# (ver Passo 1 da seção de Streaming de Vídeo).
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
