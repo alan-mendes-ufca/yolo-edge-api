@@ -6,6 +6,10 @@ Pré-requisito: models/yolov8n.pt presente no sistema de arquivos.
 import base64
 import io
 import os
+
+# Ajusta o PYTHONPATH: raiz do projeto (para "app" ser pacote) e app/ (para os imports
+# internos de main.py, como "from schemas import ...")
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -13,15 +17,12 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-# Ajusta o PYTHONPATH: raiz do projeto (para "app" ser pacote) e app/ (para os imports
-# internos de main.py, como "from schemas import ...")
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "app"))
 
 os.environ.setdefault("MODEL_NAME", "yolov8n.pt")
 
-from app.main import app, _decode_image
+from app.main import _decode_image, app
 
 client = TestClient(app)
 
@@ -75,7 +76,7 @@ class TestDecodeImage:
         assert result.shape[2] == 3
 
     def test_invalid_base64_raises(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             _decode_image("dado_invalido_nao_e_base64")
 
 
