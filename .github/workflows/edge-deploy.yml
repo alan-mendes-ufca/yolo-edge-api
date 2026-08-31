@@ -10,11 +10,10 @@ on:
     branches: [main]
 
 env:
-  REGISTRY:    ghcr.io
-  IMAGE_NAME:  ${{ github.repository }}/yolo-api
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/yolo-api
 
 jobs:
-
   # ─────────────────────────────────────────────────────────
   # JOB 1: Lint e testes unitários / smoke / integration
   # Runner: ubuntu-latest (x86_64, gratuito no GitHub)
@@ -64,7 +63,6 @@ jobs:
 
       - name: Testes automatizados
         run: pytest tests/ -v --tb=short
-
 
   # ─────────────────────────────────────────────────────────
   # JOB 2: Build da imagem Docker multi-arquitetura
@@ -116,8 +114,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to:   type=gha,mode=max
-
+          cache-to: type=gha,mode=max
 
   # ─────────────────────────────────────────────────────────
   # JOB 3: Quality gate do modelo
@@ -154,10 +151,14 @@ jobs:
           chmod 600 ~/.ssh/dvc_key
           dvc remote modify --local local_remote keyfile ~/.ssh/dvc_key
           dvc pull
-
-      - name: Executar quality gate (mAP@0.5 >= 0.50)
-        run: python scripts/validate_model.py --threshold 0.50
-
+      - name: Recuperar dataset via DVC
+        run: dvc pull dataset/exports/epi-detection
+      - name: Executar quality gate com dataset customizado
+        run: |
+          python scripts/validate_model.py \
+            --model models/yolo-epi.pt \
+            --dataset dataset/exports/epi-detection/data.yaml \
+            --threshold 0.60
 
   # ─────────────────────────────────────────────────────────
   # JOB 4: Deploy no Raspberry Pi 5 via SSH
@@ -183,9 +184,9 @@ jobs:
       - name: Deploy via SSH com rollback automático
         uses: appleboy/ssh-action@v1
         with:
-          host:     ${{ secrets.RPI_HOST }}
+          host: ${{ secrets.RPI_HOST }}
           username: ${{ secrets.RPI_USER }}
-          key:      ${{ secrets.RPI_SSH_KEY }}
+          key: ${{ secrets.RPI_SSH_KEY }}
           command_timeout: 30m
           script: |
             export DEPLOY_PATH=${{ secrets.RPI_DEPLOY_PATH }}

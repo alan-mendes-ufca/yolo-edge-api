@@ -1,9 +1,19 @@
+# dataset
+dataset/epi-detection/
+
+
 # Pesos do modelo (gerenciados pelo DVC)
 models/*.pt
 models/*.onnx
 
 # Outputs de inferência
 output/
+
+# Dataset frames brutos e anotados
+dataset/raw/*
+!dataset/raw/.gitkeep
+dataset/annotated/*
+!dataset/annotated/.gitkeep
 
 # Python
 __pycache__/
