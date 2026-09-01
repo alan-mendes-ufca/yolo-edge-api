@@ -1,0 +1,8 @@
+names:
+- Capacete
+- Colete
+- Pessoa
+path: /home/alan/Documentos/computer-vision/aula3/yolo-edge-api/dataset/exports/epi-v1-dark
+test: valid/images
+train: valid/images
+val: valid/images

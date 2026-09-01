@@ -26,3 +26,7 @@ images/
 
 # Variáveis de ambiente locais
 .env
+
+# Experimentos e saídas temporárias (Aula 5)
+preprocessing/outputs/
+runs/
