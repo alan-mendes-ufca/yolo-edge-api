@@ -1,13 +1,18 @@
+# docker-compose.yml
+# Orquestração local e de borda (Raspberry Pi 5 / ARM64).
+# Todos os containers utilizam PyTorch CPU-only (Dockerfile.api),
+# sem necessidade do NVIDIA Container Toolkit ou drivers CUDA.
+
 services:
   yolo-api:
     image: ghcr.io/alan-mendes-ufca/yolo-edge-api/yolo-api:latest
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: Dockerfile.api  # Base Python 3.11 Slim + PyTorch CPU-only
     container_name: yolo-api
     ports:
       - "8000:8000"
-    privileged: true             # Permite acesso aos nós de mídia e DMA da câmera
+    privileged: true             # Permite acesso aos nós de mídia e DMA da câmera (CSI/V4L2)
     volumes:
       - ./models:/app/models:ro  # Pesos somente-leitura
       - ./output:/app/output     # Resultados gravados aqui
@@ -44,16 +49,16 @@ services:
   yolo-stream:
     build:
       context: .
-      dockerfile: Dockerfile.api    # reutiliza a mesma base ARM64
+      dockerfile: Dockerfile.api    # Reutiliza a mesma base leve ARM64 / CPU-only
     container_name: yolo-stream
     ports:
       - "5000:5000"
-    privileged: true              # mesmo acesso à câmera do yolo-api
+    privileged: true              # Mesmo acesso à câmera do yolo-api
     volumes:
-      - ./stream:/app/stream        # código do módulo de streaming
-      - ./models:/app/models:ro     # pesos do modelo (read-only)
-      - /dev:/dev                   # dispositivos de hardware do host
-      - /run/udev:/run/udev:ro      # permite ao libcamera identificar o sensor via udev
+      - ./stream:/app/stream        # Código do módulo de streaming
+      - ./models:/app/models:ro     # Pesos do modelo (read-only)
+      - /dev:/dev                   # Dispositivos de hardware do host
+      - /run/udev:/run/udev:ro      # Permite ao libcamera identificar o sensor via udev
     environment:
       - MODEL_NAME=yolo-epi.pt
     networks:
@@ -72,4 +77,3 @@ services:
 networks:
   yolo-net:
     driver: bridge
-

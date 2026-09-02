@@ -13,6 +13,7 @@ O projeto nasceu durante o [curso de Edge AI do laboratório maker do PNAAT](htt
 ### Principais Práticas de MLOps
 
 * **Versionamento desacoplado**: Pesos binários (`.pt`) e datasets volumosos não inflam o repositório Git; o projeto utiliza DVC (*Data Version Control*) integrado a um storage remoto via SSH.
+* **Estratégia enxuta de dependências (CPU-first para Edge)**: Dispositivos de borda como o Raspberry Pi e os runners de teste não possuem GPU NVIDIA. Baixar a stack CUDA inflaria o ambiente em mais de 3 GB desnecessariamente. O projeto separa os requisitos de forma modular: `requirements.txt` com PyTorch CPU-only (padrão para testes, edge e CI) e `requirements-gpu.txt` exclusivo para estações de treinamento com GPU dedicada.
 * **Quality Gate rigoroso**: Novos modelos só avançam para o dispositivo após atingirem a métrica mínima estipulada ($mAP@0.5 \ge 0.60$) no conjunto de validação durante o pipeline de integração contínua.
 * **Acesso seguro em redes privadas**: Dispositivos de borda frequentemente operam atrás de CGNAT ou redes locais sem portas públicas expostas. Uma malha Tailscale VPN viabiliza a comunicação direta e segura ponto a ponto com os runners do CI/CD.
 * **Resiliência e deploy contínuo**: O deploy automatizado via SSH no Raspberry Pi 5 executa verificações de integridade (*health checks*) pós-inicialização, realizando rollback autônomo para o container anterior caso a nova versão falhe.
@@ -41,7 +42,7 @@ Ainda, o `yolo-edge-api` documenta uma esteira completa de engenharia: **treinam
 - FastAPI
 - Uvicorn
 - Ultralytics YOLOv8
-- PyTorch (CPU-only para ARM64 / CUDA para treino)
+- PyTorch (CPU-only para ARM64 / CUDA opcional para treino)
 - OpenCV (opencv-python-headless)
 - Pillow e NumPy
 - DVC (Data Version Control com suporte a SSH)
@@ -139,70 +140,144 @@ Documentação interativa Swagger UI disponível em `/docs` e ReDoc em `/redoc`.
 
 ### Instalar dependências
 
+Crie e ative o ambiente virtual Python:
+
 ```bash
 python -m venv .venv
 # Ativar o ambiente virtual:
 # Linux/macOS: source .venv/bin/activate
 # Windows: .venv\Scripts\Activate.ps1
+```
 
+Escolha o perfil de dependências adequado ao seu cenário:
+
+#### Opção A: CPU-Only / Edge / CI (Padrão e Recomendado)
+Ideal para desenvolvimento local, execução de testes automatizados e espelhamento do ambiente do **Raspberry Pi 5**. Instala o PyTorch via repositório CPU oficial (`--extra-index-url https://download.pytorch.org/whl/cpu`), evitando o download de mais de 3 GB de bibliotecas NVIDIA CUDA desnecessárias:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Sincronizar modelo e pesos
+#### Opção B: GPU NVIDIA / Treinamento Local (Opcional)
+Exclusivo para estações de trabalho ou servidores equipados com GPU dedicada NVIDIA para acelerar o treinamento e fine-tuning do modelo (`scripts/train_epi.py`):
+
+```bash
+pip install -r requirements-gpu.txt
+```
+
+### Sincronizar modelo e pesos via DVC
 
 ```bash
 dvc pull
 ```
 
+> Baixa os pesos treinados (`models/yolo-epi.pt`), os pesos base (`models/yolov8n.pt`) e o dataset anotado (`dataset/epi-detection/`).
+
 ### Iniciar ambiente de desenvolvimento
+
+#### Opção 1: Execução Local (Python)
+
+Inicie a API REST FastAPI:
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Ou utilizando Docker Compose:
+A aplicação fica disponível em `http://localhost:8000` (documentação Swagger interativa em `http://localhost:8000/docs`).
+
+Em outro terminal, você pode testar a inferência com o cliente:
+
+```bash
+python client/client.py
+```
+
+Para iniciar o servidor de streaming MJPEG:
+
+```bash
+python stream/mjpeg_server.py --port 5000
+```
+
+#### Opção 2: Docker Compose (Ambiente Completo)
+
+Para subir todos os serviços (`yolo-api`, `yolo-client`, `yolo-stream`) com containers baseados em PyTorch CPU-only otimizados para Raspberry Pi (ARM64) e estações de trabalho:
+
+```bash
+docker compose up -d
+```
+
+Ou iniciar apenas o serviço da API:
 
 ```bash
 docker compose up -d yolo-api
 ```
 
-A aplicação fica disponível em `http://localhost:8000` (documentação interativa em `http://localhost:8000/docs`).
+Acompanhe os logs da API em tempo real:
+
+```bash
+docker compose logs -f yolo-api
+```
+
+Para parar todos os containers:
+
+```bash
+docker compose down
+```
 
 - - -
 
 ## Scripts úteis
 
-| Script                                | Descrição                                                   |
-| ------------------------------------- | ----------------------------------------------------------- |
-| `uvicorn app.main:app --reload`       | Inicia a API com recarregamento automático em desenvolvimento. |
-| `docker compose up -d`                | Inicia os containers da API, cliente e streaming.           |
-| `docker compose logs -f yolo-api`     | Exibe os logs estruturados da API em tempo real.            |
-| `docker compose down`                 | Interrompe e remove os containers locais.                   |
-| `dvc pull`                            | Baixa pesos do modelo e datasets a partir do remote DVC.    |
-| `pytest tests/ -v`                    | Executa a suíte de testes automatizados com relatório detalhado. |
-| `ruff check app/`                     | Valida regras de lint e boas práticas no código da aplicação. |
-| `python scripts/validate_model.py`    | Executa o Quality Gate avaliando o limiar de mAP@0.5 do modelo. |
-| `bash scripts/deploy.sh`              | Executa deploy com pull da imagem e rollback automático se falhar. |
-| `python train_epi.py`                 | Inicia o fine-tuning do modelo YOLOv8 para detecção de EPIs. |
-| `python stream/mjpeg_server.py`       | Inicia o servidor dedicado de streaming de vídeo MJPEG.     |
+| Script                                      | Descrição                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------ |
+| `uvicorn app.main:app --reload`             | Inicia a API com recarregamento automático em desenvolvimento.                 |
+| `python client/client.py`                   | Executa o cliente de teste realizando inferências individual e em lote.        |
+| `python stream/mjpeg_server.py`             | Inicia o servidor dedicado de streaming de vídeo MJPEG em tempo real.         |
+| `python scripts/inspect_dataset.py`         | Inspeciona integridade, balanceamento de classes e anotações do dataset.       |
+| `python scripts/validate_model.py`          | Executa o Quality Gate avaliando se o mAP@0.5 de `yolo-epi.pt` atinge o limiar. |
+| `python scripts/train_epi.py`               | Inicia o fine-tuning do modelo YOLOv8 para detecção de EPIs (usar `requirements-gpu.txt`). |
+| `python preprocessing/experiments/run_baseline.py` | Avalia o baseline de pré-processamento no dataset `epi-detection`.     |
+| `docker compose up -d`                      | Inicia todos os containers da esteira (`yolo-api`, `yolo-client`, `yolo-stream`). |
+| `docker compose logs -f yolo-api`           | Exibe os logs estruturados da API em tempo real.                               |
+| `docker compose down`                       | Interrompe e remove os containers locais.                                      |
+| `dvc pull`                                  | Baixa pesos do modelo e datasets a partir do storage remoto DVC.               |
+| `pytest tests/ -v`                          | Executa a suíte de testes automatizados com relatório detalhado.               |
+| `ruff check .`                              | Valida regras de lint e boas práticas em todo o repositório.                   |
+| `bash scripts/deploy.sh`                    | Executa deploy com pull da imagem e rollback automático se falhar.             |
 
 - - -
 
 ## Testes
 
-O projeto usa Pytest para testes automatizados. A suíte cobre integridade de endpoints, funções isoladas, decodificação de imagens, pipelines de pré-processamento e o fluxo completo de inferência:
+O projeto conta com uma suíte abrangente de testes automatizados com **Pytest** e **Pytest-Cov**, cobrindo 100% dos endpoints REST, esquemas Pydantic, ciclo de vida do modelo, transformações geométricas de pré-processamento e regras de Quality Gate:
 
-1. Verificação de status e saúde do serviço (`/health`).
-2. Consulta de métricas operacionais (`/metrics`).
-3. Decodificação de imagem em Base64 e validação de dimensões e canais.
-4. Redimensionamento via Letterbox e correção geométrica de bboxes.
-5. Inferência com imagem de referência (`zidane.jpg`), validando detecções e formato do payload.
-6. Inferência em lote (`/predict/batch`) e tratamento de erros para entradas inválidas.
+1. **Testes de Fumaça (`smoke`)**: Verificação de disponibilidade e formato em `/health` e `/metrics`.
+2. **Testes Unitários (`unit`)**:
+   - Decodificação de imagens Base64 e validação de dimensões/canais.
+   - Schemas Pydantic (`PredictRequest`, `Detection`, `BatchPredictRequest`, etc.).
+   - Carregamento, fallback e cache de instâncias YOLO em `app/model.py`.
+   - Pipeline de pré-processamento: Letterbox, CLAHE (LAB/HSV), filtros gaussianos/mediana e normalização.
+   - Quality Gate: parser de argumentos e validação de limiar em `scripts/validate_model.py`.
+3. **Testes de Câmera & Streaming (`camera`)**:
+   - Endpoints de captura física CSI/USB (`/predict/camera` e `/predict/camera/image`) com simulação de hardware e falhas.
+   - Streaming MJPEG (`/stream/camera` e `/stream/view`) com validação de cabeçalhos multipart e bloqueio de concorrência (`HTTP 409`).
+4. **Testes de Integração (`integration`)**:
+   - Inferência de imagem via Base64 e URL externa com Ultralytics YOLO (`/predict` e `/predict/image`).
+   - Inferência em lote (`/predict/batch`) e persistência acumulada de métricas.
 
-Para executar:
+### Executar a suíte de testes
 
 ```bash
-pytest tests/ -v
+# Executar todos os testes
+pytest
+
+# Executar apenas testes unitários rápidos (sem necessidade de GPU ou modelos pesados)
+pytest -m unit
+
+# Executar apenas testes de integração
+pytest -m integration
+
+# Executar com relatório de cobertura de código
+pytest --cov=app --cov=preprocessing --cov-report=term-missing
 ```
 
 - - - 
@@ -234,7 +309,7 @@ O conteúdo teórico e os estudos práticos do projeto estão organizados em dir
 - [x] Servidor de streaming MJPEG de baixa latência (`/stream/camera` e `/stream/view`).
 - [x] Módulo de pré-processamento com Letterbox e mapeamento inverso de coordenadas.
 - [x] Equalização CLAHE para ambientes de baixa iluminação.
-- [x] Dataset e script de treinamento para detecção de EPIs (`train_epi.py`).
+- [x] Dataset e script de treinamento para detecção de EPIs (`scripts/train_epi.py`).
 
 ### Milestone 4: Próximos Passos
 - [ ] Exportação e quantização de modelos para INT8 via ONNX Runtime / NCNN.
