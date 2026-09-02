@@ -54,7 +54,7 @@ def parse_args():
     p.add_argument("--device", type=int, default=0, help="Índice do dispositivo de câmera")
     p.add_argument("--width", type=int, default=640, help="Largura de captura")
     p.add_argument("--height", type=int, default=480, help="Altura de captura")
-    p.add_argument("--model", type=str, default="models/yolov8n.pt", help="Caminho do modelo YOLO")
+    p.add_argument("--model", type=str, default="models/yolo-epi.pt", help="Caminho do modelo YOLO")
     p.add_argument("--conf", type=float, default=0.4, help="Limiar de confiança")
     p.add_argument("--frames", type=int, default=100, help="Frames para medir antes de encerrar")
     return p.parse_args()
@@ -130,7 +130,7 @@ def main():
     print(f"  Ciclo médio       : {total_cycle / max(n, 1):>7.1f} ms")
     print(f"  FPS sustentado    : {1000 / (total_cycle / max(n, 1)):>7.1f} FPS" if n > 0 else "  FPS sustentado: 0")
     print("=" * 58)
-    print("")
+    print()
     print("DIAGNÓSTICO:")
     avg_cap = total_capture / max(n, 1)
     if avg_cap > 50:

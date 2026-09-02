@@ -3,8 +3,17 @@ import base64
 import io
 import json
 import subprocess
+import sys
 import time
 import uuid
+from pathlib import Path
+
+# Garante que tanto o diretório app/ quanto a raiz estejam no sys.path
+_app_dir = Path(__file__).resolve().parent
+_root_dir = _app_dir.parent
+for _dir in [str(_app_dir), str(_root_dir)]:
+    if _dir not in sys.path:
+        sys.path.insert(0, _dir)
 
 import cv2
 import httpx
@@ -23,6 +32,8 @@ from schemas import (
     PredictResponse,
 )
 
+from preprocessing.preprocessor import CONFIG_DEFAULT, Preprocessor
+
 app = FastAPI(
     title="YOLO Inference API",
     description="API REST para inferência com YOLOv8 e Câmera no Raspberry Pi 5",
@@ -31,6 +42,7 @@ app = FastAPI(
 
 _metrics = {"total": 0, "success": 0, "total_ms": 0.0}
 _streaming_lock = asyncio.Lock()
+_preprocessor = Preprocessor(CONFIG_DEFAULT)   # instância global
 
 
 def log_event(event: str, level: str = "INFO", **kwargs):
@@ -101,23 +113,30 @@ def _capture_frame_from_camera(device_id: int = 0) -> np.ndarray:
 
 def _run_inference(image_np: np.ndarray, model_name: str, confidence: float) -> PredictResponse:
     model = load_model(model_name)
+    # Pré-processamento explícito
+    # image_np chega em RGB (já convertido em _decode_image) --
+    # o Preprocessor espera BGR, então converte temporariamente
+    frame_bgr = image_np[:, :, ::-1]
+    preproc_res = _preprocessor.process(frame_bgr)
+    frame_ready = preproc_res.frame  # RGB, letterboxed
     t0 = time.perf_counter()
-    results = model(image_np, conf=confidence, verbose=False)
+    results = model(frame_ready, conf=confidence, verbose=False)
     elapsed_ms = (time.perf_counter() - t0) * 1000
-
     detections = []
     for r in results:
         for box in r.boxes:
-            coords = box.xyxy[0].tolist()
+            # Ajusta as coordenadas do espaço letterboxed de volta ao
+            # espaço da imagem original -- sem isso, os bboxes retornados
+            # pela API ficam deslocados sempre que houver padding
+            bbox_lb = box.xyxy[0].cpu().numpy().reshape(1, 4)
+            bbox_orig = _preprocessor.adjust_boxes(bbox_lb, preproc_res)[0]
             cls_id = int(box.cls[0].item())
             conf_val = float(box.conf[0].item())
-
             detections.append(Detection(
                 label=model.names[cls_id],
                 confidence=round(conf_val, 4),
-                bbox=[round(float(c), 2) for c in coords],
+                bbox=[round(float(c), 2) for c in bbox_orig],
             ))
-
     h, w = image_np.shape[:2]
     return PredictResponse(
         detections=detections,
@@ -218,7 +237,7 @@ def predict_image(request: PredictRequest):
 def predict_from_camera(
     device_id: int = Query(0, description="Índice do dispositivo (/dev/videoX)"),
     confidence: float = Query(0.25, ge=0.0, le=1.0, description="Limiar de confiança"),
-    model_name: str = Query("yolov8n.pt", description="Modelo YOLO a ser utilizado")
+    model_name: str = Query("yolo-epi.pt", description="Modelo YOLO a ser utilizado")
 ):
     """Dispara a captura de uma foto pela câmera, infere e retorna as detecções em JSON."""
     _metrics["total"] += 1
@@ -237,7 +256,7 @@ def predict_from_camera(
 def predict_from_camera_image(
     device_id: int = Query(0, description="Índice do dispositivo (/dev/videoX)"),
     confidence: float = Query(0.25, ge=0.0, le=1.0, description="Limiar de confiança"),
-    model_name: str = Query("yolov8n.pt", description="Modelo YOLO a ser utilizado")
+    model_name: str = Query("yolo-epi.pt", description="Modelo YOLO a ser utilizado")
 ):
     """Dispara a câmera, infere e renderiza a foto real capturada com os bounding boxes na Swagger UI."""
     _metrics["total"] += 1
@@ -270,7 +289,7 @@ def predict_from_camera_image(
 async def stream_camera(
     request: Request,
     confidence: float = Query(0.25, ge=0.0, le=1.0, description="Limiar de confiança"),
-    model_name: str = Query("yolov8n.pt", description="Modelo YOLO a ser utilizado"),
+    model_name: str = Query("yolo-epi.pt", description="Modelo YOLO a ser utilizado"),
     framerate: int = Query(15, ge=1, le=30, description="FPS de captura solicitados ao sensor"),
 ):
     """Transmite vídeo contínuo da câmera com detecções YOLO sobrepostas em cada frame."""

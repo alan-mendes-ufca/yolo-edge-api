@@ -1,0 +1,16 @@
+# Dependências para desenvolvimento e treinamento local com GPU NVIDIA (CUDA).
+# Utilize este arquivo em estações com placa de vídeo dedicada para acelerar o treino
+# do modelo YOLO (scripts/train_epi.py).
+#
+# Instalação:
+#   pip install -r requirements-gpu.txt
+
+torch
+torchvision
+
+-r app/requirements.txt
+
+pytest
+pytest-cov
+pytest-mock
+ruff

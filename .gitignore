@@ -1,3 +1,8 @@
+# dataset
+dataset/epi-detection/
+dataset/epi-detection-dark/
+
+
 # Pesos do modelo (gerenciados pelo DVC)
 models/*.pt
 models/*.onnx
@@ -5,10 +10,19 @@ models/*.onnx
 # Outputs de inferência
 output/
 
+# Dataset frames brutos e anotados
+dataset/raw/*
+!dataset/raw/.gitkeep
+dataset/annotated/*
+!dataset/annotated/.gitkeep
+
 # Python
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 .venv/
 
 # Imagens de teste grandes
@@ -16,3 +30,7 @@ images/
 
 # Variáveis de ambiente locais
 .env
+
+# Experimentos e saídas temporárias (Aula 5)
+preprocessing/outputs/
+runs/

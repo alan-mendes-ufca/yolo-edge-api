@@ -1,5 +1,5 @@
 # .github/workflows/edge-deploy.yml
-# Pipeline completo: lint → testes → build ARM64 → quality gate → deploy
+# Pipeline completo: lint/testes → quality gate → build ARM64 → deploy
 
 name: Edge AI — Build, Test e Deploy
 
@@ -10,14 +10,13 @@ on:
     branches: [main]
 
 env:
-  REGISTRY:    ghcr.io
-  IMAGE_NAME:  ${{ github.repository }}/yolo-api
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/yolo-api
 
 jobs:
-
   # ─────────────────────────────────────────────────────────
   # JOB 1: Lint e testes unitários / smoke / integration
-  # Runner: ubuntu-latest (x86_64, gratuito no GitHub)
+  # Runner: ubuntu-latest (x86_64)
   # ─────────────────────────────────────────────────────────
   test:
     name: "Lint & Tests"
@@ -39,40 +38,93 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Instalar dependências
+      - name: Instalar dependências (CPU-only)
         run: |
-          pip install -r app/requirements.txt
-          pip install pytest ruff
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Download modelo para testes
         run: |
-          pip install "dvc[ssh]"
+          pip install --upgrade "dvc[ssh]" "pygtrie==2.5.0"
           mkdir -p ~/.ssh
           echo "${{ secrets.RPI_SSH_KEY }}" | tr -d '\r' > ~/.ssh/dvc_key
           chmod 600 ~/.ssh/dvc_key
           dvc remote modify --local local_remote keyfile ~/.ssh/dvc_key
           dvc pull
 
-      - name: Disponibiliza o modelo em /app/models (mesmo path usado no Docker)
+      - name: Disponibiliza o modelo em /app/models
         run: |
           sudo mkdir -p /app
           sudo ln -sfn "$GITHUB_WORKSPACE/models" /app/models
           ls -la /app/models
 
       - name: Lint (ruff)
-        run: ruff check app/
+        run: ruff check .
 
-      - name: Testes automatizados
-        run: pytest tests/ -v --tb=short
+      - name: Testes automatizados com cobertura
+        run: pytest tests/ -v --tb=short --cov=app --cov=preprocessing --cov-report=term-missing --cov-report=xml
 
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
 
   # ─────────────────────────────────────────────────────────
-  # JOB 2: Build da imagem Docker multi-arquitetura
-  # Plataforma: linux/arm64 (rpicam-apps-lite não existe para amd64)
+  # JOB 2: Quality gate do modelo
+  # Valida mAP@0.5 antes de autorizar o build pesado e o deploy
+  # ─────────────────────────────────────────────────────────
+  model-gate:
+    name: "Model Quality Gate"
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Conecta à rede Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependências (PyTorch CPU + Ultralytics + DVC)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install ultralytics --upgrade "dvc[ssh]" "pygtrie==2.5.0"
+
+      - name: Recuperar modelo e dataset via DVC
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.RPI_SSH_KEY }}" | tr -d '\r' > ~/.ssh/dvc_key
+          chmod 600 ~/.ssh/dvc_key
+          dvc remote modify --local local_remote keyfile ~/.ssh/dvc_key
+          dvc pull
+          dvc pull dataset/epi-detection
+
+      - name: Executar quality gate com dataset customizado
+        run: |
+          python scripts/validate_model.py \
+            --model models/yolo-epi.pt \
+            --dataset dataset/epi-detection/data.yaml \
+            --threshold 0.60
+
+  # ─────────────────────────────────────────────────────────
+  # JOB 3: Build da imagem Docker multi-arquitetura
+  # Executado apenas após validação do modelo
   # ─────────────────────────────────────────────────────────
   build:
     name: "Build & Push (ARM64)"
-    needs: test
+    needs: model-gate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -116,56 +168,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to:   type=gha,mode=max
-
-
-  # ─────────────────────────────────────────────────────────
-  # JOB 3: Quality gate do modelo
-  # Valida mAP@0.5 antes de autorizar o deploy
-  # ─────────────────────────────────────────────────────────
-  model-gate:
-    name: "Model Quality Gate"
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Conecta à rede Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Instalar dependências
-        run: pip install ultralytics "dvc[ssh]"
-
-      - name: Recuperar modelo via DVC
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.RPI_SSH_KEY }}" | tr -d '\r' > ~/.ssh/dvc_key
-          chmod 600 ~/.ssh/dvc_key
-          dvc remote modify --local local_remote keyfile ~/.ssh/dvc_key
-          dvc pull
-
-      - name: Executar quality gate (mAP@0.5 >= 0.50)
-        run: python scripts/validate_model.py --threshold 0.50
-
+          cache-to: type=gha,mode=max
 
   # ─────────────────────────────────────────────────────────
   # JOB 4: Deploy no Raspberry Pi 5 via SSH
-  # Executa apenas em push para main (não em PRs)
+  # Executa apenas em push para main
   # ─────────────────────────────────────────────────────────
   deploy:
     name: "Deploy → Raspberry Pi 5"
-    needs: model-gate
+    needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
@@ -183,9 +194,9 @@ jobs:
       - name: Deploy via SSH com rollback automático
         uses: appleboy/ssh-action@v1
         with:
-          host:     ${{ secrets.RPI_HOST }}
+          host: ${{ secrets.RPI_HOST }}
           username: ${{ secrets.RPI_USER }}
-          key:      ${{ secrets.RPI_SSH_KEY }}
+          key: ${{ secrets.RPI_SSH_KEY }}
           command_timeout: 30m
           script: |
             export DEPLOY_PATH=${{ secrets.RPI_DEPLOY_PATH }}

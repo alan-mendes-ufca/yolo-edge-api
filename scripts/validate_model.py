@@ -1,21 +1,24 @@
+#!/usr/bin/env python3
 """
 scripts/validate_model.py
 Quality gate: bloqueia o deploy se o mAP@0.5 estiver abaixo do limiar.
-Uso: python scripts/validate_model.py [--threshold 0.50]
+Uso: python scripts/validate_model.py [--model models/yolo-epi.pt] [--dataset dataset/epi-detection/data.yaml] [--threshold 0.60]
 """
 import argparse
 import sys
 from pathlib import Path
 
-# Limiar padrão de qualidade
-DEFAULT_THRESHOLD = 0.50
+# Limiar padrão de qualidade (Quality Gate)
+DEFAULT_THRESHOLD = 0.60
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model",     default="models/yolov8n.pt")
-    parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
-    parser.add_argument("--dataset",   default=None,
-        help="Caminho para o YAML do dataset de validação (opcional)")
+    parser.add_argument("--model",     default="models/yolo-epi.pt",
+        help="Caminho para os pesos do modelo YOLO (padrão: models/yolo-epi.pt)")
+    parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
+        help="Limiar mínimo de mAP@0.5 (padrão: 0.60)")
+    parser.add_argument("--dataset",   default="dataset/epi-detection/data.yaml",
+        help="Caminho para o YAML do dataset de validação (padrão: dataset/epi-detection/data.yaml)")
     return parser.parse_args()
 
 
@@ -35,7 +38,7 @@ def main():
         print(f"[INFO] Validando com dataset: {args.dataset}")
         metrics = model.val(data=args.dataset, split="val", verbose=False)
     else:
-        # Validação rápida com COCO128 (dataset embutido no ultralytics)
+        # Validação rápida com COCO128 (dataset padrão)
         print("[INFO] Validando com COCO128 (dataset padrão)")
         metrics = model.val(data="coco128.yaml", split="val", verbose=False)
 

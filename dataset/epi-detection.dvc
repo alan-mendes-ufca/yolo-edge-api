@@ -1,0 +1,6 @@
+outs:
+- md5: c75913f0dadb0142e59cc1c6130f3719.dir
+  size: 17233916
+  nfiles: 705
+  hash: md5
+  path: epi-detection

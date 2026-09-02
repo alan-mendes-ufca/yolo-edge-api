@@ -108,7 +108,7 @@ def parse_args():
     p.add_argument("--width", type=int, default=640)
     p.add_argument("--height", type=int, default=480)
     p.add_argument("--fps", type=int, default=30)
-    p.add_argument("--model", type=str, default="models/yolov8n.pt")
+    p.add_argument("--model", type=str, default="models/yolo-epi.pt")
     p.add_argument("--conf", type=float, default=0.4)
     p.add_argument("--infer-every", type=int, default=3)
     p.add_argument("--infer-size", type=int, default=320)
@@ -132,7 +132,7 @@ def main():
     )
     producer.start()
     time.sleep(1.0)  # aguarda primeiro frame
-    print(f"[INFO] Servidor MJPEG iniciado.")
+    print("[INFO] Servidor MJPEG iniciado.")
     print(f"[INFO] Acesse no navegador: http://<IP_DO_RASPBERRY>:{args.port}/")
     print(f"[INFO] Stream direto:        http://<IP_DO_RASPBERRY>:{args.port}/stream")
     print(f"[INFO] Health check:         http://<IP_DO_RASPBERRY>:{args.port}/health")

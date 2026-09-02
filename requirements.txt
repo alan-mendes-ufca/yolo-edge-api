@@ -1,7 +1,7 @@
-# Dependências para desenvolvimento e testes locais (equivalente ao passo 7 do README).
-# Em produção, o Dockerfile.api instala apenas app/requirements.txt dentro do container.
+# Dependências para desenvolvimento e testes locais (CPU-only por padrão).
+# Evita o download do stack CUDA da NVIDIA (~3-4 GB), desnecessário no Raspberry Pi e nos runners de CI.
+# Em produção no container, o Dockerfile.api instala PyTorch CPU seguido de app/requirements.txt.
 
-# PyTorch CPU-only: evita puxar o stack CUDA, desnecessário no Raspberry Pi.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch
 torchvision
@@ -9,4 +9,6 @@ torchvision
 -r app/requirements.txt
 
 pytest
+pytest-cov
+pytest-mock
 ruff
