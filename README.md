@@ -1,196 +1,243 @@
-# yolo-edge-api — MLOps e CI/CD para Edge AI
+# yolo-edge-api
 
-Pipeline de **entrega contínua** para a API de inferência YOLOv8 + FastAPI da Aula 2, agora
-operada com práticas de MLOps: código, container e pesos do modelo são versionados
-separadamente, testes automatizados bloqueiam regressões, e o deploy no Raspberry Pi 5
-acontece sozinho a cada `git push`, com rollback automático se algo quebrar.
+O **`yolo-edge-api`** é um projeto de **visão computacional embarcada** (*Edge AI*) focado na aplicação prática de **MLOps** para dispositivos de borda. O projeto estabelece uma base sólida para o treinamento, otimização, deploy contínuo e manutenção de modelos de inteligência artificial em ambientes restritos.
 
-## O que o projeto faz
+- - -
 
-Resolve o problema descrito na apostila — "funciona no lab, quebra no campo" — dando
-rastreabilidade e automação para as três perguntas que aparecem sempre que se opera um
-container de visão computacional embarcada em produção:
+## Propósito
 
-- **Como atualizar o modelo em campo sem interromper o serviço?** → o binário `yolov8n.pt`
-  é versionado pelo DVC (hash MD5 + storage externo), não pelo Git.
-- **Como saber o que está rodando em cada dispositivo?** → toda imagem publicada carrega a
-  tag `sha-<commit>`, então `docker inspect` no Pi diz exatamente qual código está ativo.
-- **Como reverter uma atualização ruim sem acesso físico?** → o script de deploy faz
-  health-check pós-deploy e reverte sozinho para a imagem anterior se a API não responder.
+O projeto nasceu durante o [curso de Edge AI do laboratório maker do PNAAT](https://fit-tecnologia.org.br/pnaat/regioes/) na UFCA, com o objetivo de aplicar conceitos fundamentais de **MLOps** em todo o ciclo de vida de um modelo de visão computacional: 
 
-## Como funciona
+`Dados (Roboflow/DVC) ➔ Código & Modelo (Git/YOLOv8) ➔ CI/CD (GitHub Actions) ➔ Deploy (Docker/Pi 5) ➔ Observabilidade (Alloy/Grafana)`
 
-Um `git push` na branch `main` dispara `.github/workflows/edge-deploy.yml`, que roda quatro
-jobs em sequência no GitHub Actions:
+### Principais Práticas de MLOps
 
+* **Versionamento desacoplado**: Pesos binários (`.pt`) e datasets volumosos não inflam o repositório Git; o projeto utiliza DVC (*Data Version Control*) integrado a um storage remoto via SSH.
+* **Quality Gate rigoroso**: Novos modelos só avançam para o dispositivo após atingirem a métrica mínima estipulada ($mAP@0.5 \ge 0.60$) no conjunto de validação durante o pipeline de integração contínua.
+* **Acesso seguro em redes privadas**: Dispositivos de borda frequentemente operam atrás de CGNAT ou redes locais sem portas públicas expostas. Uma malha Tailscale VPN viabiliza a comunicação direta e segura ponto a ponto com os runners do CI/CD.
+* **Resiliência e deploy contínuo**: O deploy automatizado via SSH no Raspberry Pi 5 executa verificações de integridade (*health checks*) pós-inicialização, realizando rollback autônomo para o container anterior caso a nova versão falhe.
+
+Ainda, o `yolo-edge-api` documenta uma esteira completa de engenharia: **treinamento e fine-tuning** de dataset customizado para detecção de EPIs, **pipeline de pré-processamento** (*Letterbox, equalização adaptativa CLAHE e análise de filtros espaciais*), **streaming de vídeo** concorrente (*MJPEG*) e **entrega contínua** focada em hardware restrito.
+
+- - -
+
+## Funcionalidades
+
+- **Inferência REST de alta eficiência**: Detecção de objetos em imagens únicas (Base64 ou URL) e em lote (`/predict/batch`).
+- **Respostas visuais anotadas**: Endpoints dedicados para renderização e retorno direto de imagens JPEG com as caixas delimitadoras sobrepostas (`/predict/image` e `/predict/camera/image`).
+- **Integração com câmera física na borda**: Captura via interface CSI nativa do Raspberry Pi (`rpicam-still`) ou câmeras USB convencionais (V4L2).
+- **Streaming de vídeo em tempo real (MJPEG)**: Feed de vídeo ao vivo com inferência sobreposta por frame (`/stream/camera`) e interface web integrada (`/stream/view`).
+- **Pipeline de pré-processamento inteligente**: Redimensionamento com Letterbox (preservando o aspect ratio sem distorcer geometrias), ajuste inverso de bboxes (`adjust_boxes`) e equalização CLAHE para baixa luminosidade.
+- **Detecção de EPIs**: Suporte a pesos customizados (`yolo-epi.pt`) para detecção de equipamentos de proteção individual (capacetes, coletes, etc.).
+- **Versionamento de artefatos com DVC**: Pesos do modelo e datasets sob controle de versão, sem comprometer o histórico do Git.
+- **CI/CD com MLOps completo**: 4 jobs no GitHub Actions cobrindo validação de código, quality gate de performance do modelo, build de imagens ARM64 e deploy com rollback no Raspberry Pi 5.
+- **Métricas e observabilidade**: Endpoint `/metrics` com totalizadores de requisições e latência média, complementado por logs em JSON estruturado para indexação.
+
+- - -
+
+## Stack principal
+
+- Python 3.11+
+- FastAPI
+- Uvicorn
+- Ultralytics YOLOv8
+- PyTorch (CPU-only para ARM64 / CUDA para treino)
+- OpenCV (opencv-python-headless)
+- Pillow e NumPy
+- DVC (Data Version Control com suporte a SSH)
+- Docker e Docker Compose
+- GitHub Actions (Buildx, QEMU ARM64)
+- Tailscale (Mesh VPN)
+- Pytest
+- Ruff
+
+- - -
+
+## Arquitetura
+
+### Arquitetura do Sistema
+
+```mermaid
+flowchart TD
+    subgraph DataOps["Dados & Modelo (DVC)"]
+        D1[Datasets / EPIs] --> DVC[(DVC Remote via SSH)]
+        DVC --> M1[Pesos YOLOv8 .pt]
+    end
+
+    subgraph CI["CI/CD Pipeline (GitHub Actions)"]
+        G1[Git Push] --> T1[Smoke & Unit Tests]
+        T1 --> QG{Quality Gate\nmAP@0.5 >= 0.60}
+        QG -- Reprovado --> Fail[Bloqueia Deploy]
+        QG -- Aprovado --> B1[Build Docker ARM64]
+    end
+
+    subgraph Edge["Ambiente de Borda (Raspberry Pi 5)"]
+        VPN[Tailscale VPN Mesh]
+        B1 -->|Deploy SSH seguro| VPN
+        VPN --> DC[Docker Container]
+        
+        subgraph Container["yolo-edge-api"]
+            API[FastAPI / Rotas HTTP]
+            PP[Pré-processamento: Letterbox / CLAHE]
+            ST[Stream MJPEG: v1 / v2 / v3]
+            API --> PP --> INF[Inferência YOLOv8]
+            INF --> ST
+        end
+        DC --> Container
+    end
+
+    subgraph Obs["Observabilidade"]
+        Container -->|Métricas & Logs| AL[Grafana Alloy]
+        AL --> GF[(Grafana Dashboard)]
+    end
 ```
-push → main
-  │
-  ├── [1] Lint & Tests        ruff + pytest (14 testes: smoke/unit/integration)
-  │
-  ├── [2] Build & Push ARM64  docker buildx (QEMU) → ghcr.io/<user>/yolo-edge-api/yolo-api:sha-<hash>
-  │
-  ├── [3] Model Quality Gate  dvc pull + valida mAP@0.5 ≥ 0.50 (bloqueia deploy se reprovar)
-  │
-  └── [4] Deploy → Pi 5       SSH até o Pi, `scripts/deploy.sh`: pull da imagem, sobe,
-                              healthcheck em /health, rollback automático se falhar
-```
-
-Como o Raspberry Pi normalmente fica atrás do roteador de casa (IP privado, sem porta
-exposta), os jobs 1, 3 e 4 entram primeiro na tailnet via **Tailscale** para alcançar o
-dispositivo — sem isso, SSH e `dvc pull` a partir dos runners do GitHub (que rodam na nuvem)
-sempre dão timeout.
 
 ### Estrutura do repositório
 
-| Caminho | Função |
-|---|---|
-| `app/` | API FastAPI (idêntica à da Aula 2) + `log_event()`, que emite logs estruturados em JSON no endpoint `/predict` |
-| `client/` | Cliente HTTP de exemplo, consome a API |
-| `tests/test_api.py` | 14 testes: smoke (`/health`, `/metrics`), unit (`_decode_image`), integration (`/predict`, `/predict/batch`) |
-| `tests/assets/zidane.jpg` | Imagem de referência para os integration tests |
-| `scripts/validate_model.py` | Quality gate: roda `model.val()` e aborta o pipeline (`exit 1`) se `mAP@0.5` < limiar |
-| `scripts/deploy.sh` | Deploy no Pi: `docker compose pull/up`, aguarda health check, reverte para a imagem anterior em caso de falha |
-| `.github/workflows/edge-deploy.yml` | Os 4 jobs descritos acima |
-| `models/yolov8n.pt.dvc` | Ponteiro DVC (hash MD5) para os pesos — o `.pt` em si nunca vai para o Git |
-| `Dockerfile.api` | Instala PyTorch **CPU-only** antes do resto das deps (evita puxar o stack CUDA, que não serve para um Pi sem GPU) |
-| `docker-compose.yml` | Usa `image:` apontando para o `ghcr.io/...` publicado pelo pipeline, em vez de rebuildar tudo localmente a cada deploy |
-
-## O que já está pronto neste repositório
-
-- Todo o código da API, testes, scripts e o workflow do GitHub Actions foram escritos
-  seguindo a apostila.
-- O DVC já foi inicializado neste diretório (`dvc init --subdir`, já que ele vive dentro do
-  monorepo da disciplina) e `models/yolov8n.pt` já está sob controle do DVC — veja
-  `models/yolov8n.pt.dvc`.
-- O remote configurado em `.dvc/config` aponta para um diretório **local de demonstração**
-  (`~/dvc-storage-aula3`, fora do repositório) só para provar o fluxo `dvc add` → `dvc push`
-  → `dvc pull` funcionando neste computador. **Isso não é o remote de produção** — veja o
-  passo 3 abaixo.
-
-## O que você precisa fazer na prática
-
-Esta é a parte que só você pode fazer, porque depende de contas e hardware que este
-ambiente não tem acesso: seu GitHub, seu Raspberry Pi físico e sua rede.
-
-### 1. Criar o repositório e subir o código
-```bash
-# Crie um repositório público vazio em github.com (ex: yolo-edge-api)
-# Public é necessário para usar GitHub Actions sem limite de minutos
-cd aula3/yolo-edge-api
-git init   # se for tratar como repositório próprio, separado do monorepo da disciplina
-git remote add origin https://github.com/<seu-usuario>/yolo-edge-api.git
-git add .
-git commit -m "chore: importa estrutura base do projeto YOLO + FastAPI"
-git push -u origin main
-```
-Se o push pedir senha, ela não vai funcionar — o GitHub descontinuou autenticação por
-senha em linha de comando. Gere um **Personal Access Token** (Settings → Developer settings →
-Personal access tokens → Tokens classic, com escopos `repo` e `workflow`) e use-o como senha.
-
-### 2. Instalar os pesos do modelo (`yolov8n.pt`)
-O binário não está no Git — ele é reconstruído via DVC. No Raspberry Pi (ou em qualquer
-clone deste repositório):
-```bash
-pip install "dvc[ssh]" --break-system-packages
-dvc pull        # baixa yolov8n.pt a partir do remote configurado em .dvc/config
-```
-Antes disso funcionar em produção, reconfigure o remote para apontar para o storage real no
-seu Raspberry Pi (troque o remote local de demonstração por um acessível via SSH):
-```bash
-RPI_USER=<seu_usuario>
-RPI_HOST=<ip_do_pi>   # depois da Seção "Tailscale" abaixo, use o IP 100.x.y.z
-dvc remote modify local_remote url ssh://$RPI_USER@$RPI_HOST/home/$RPI_USER/dvc-storage
-mkdir -p ~/dvc-storage   # no próprio Pi, cria o diretório de storage
-dvc push                 # reenvia o binário para o novo remote
-git add .dvc/config
-git commit -m "chore: reconfigura DVC remote para acesso via SSH no CI"
+```txt
+yolo-edge-api/
+├── .github/workflows/   # CI/CD: testes, quality gate de mAP, build ARM64 e deploy
+├── app/                 # FastAPI: schemas Pydantic, rotas REST e ciclo de vida do modelo
+├── preprocessing/       # Otimizações de entrada (Letterbox, CLAHE) e benchmarks
+├── stream/              # Streaming MJPEG (v1 naive, v2 threaded, v3 desacoplado)
+├── scripts/             # Automação operacional: Quality Gate, deploy e rollback
+├── tests/               # Suíte de testes (smoke, unitários, integração e GPU)
+├── models/              # Metadados de rastreio DVC (.dvc) para pesos (.pt)
+├── dataset/             # Metadados DVC para datasets de EPIs
+├── client/              # Cliente de teste para validação das rotas de inferência
+└── apostilas/           # Referências conceituais e notas técnicas da disciplina
 ```
 
-### 3. Dar acesso SSH ao Raspberry Pi
-```bash
-# No seu computador (não no Pi)
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/rpi_deploy -N ""
+- - -
 
-# No Raspberry Pi, autorize a chave pública
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
-echo "<conteúdo de rpi_deploy.pub>" >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
+## API
+
+| Método   | Rota                    | Descrição                                                                 |
+| -------- | ----------------------- | ------------------------------------------------------------------------- |
+| `GET`    | `/health`               | Retorna o estado de saúde da aplicação e confirmação do modelo carregado. |
+| `GET`    | `/metrics`              | Retorna métricas de volume de requisições, sucessos e latência média.     |
+| `POST`   | `/predict`              | Executa inferência sobre imagem (Base64 ou URL) e retorna detecções JSON. |
+| `POST`   | `/predict/image`        | Executa inferência sobre imagem enviada e retorna JPEG anotado com bboxes. |
+| `POST`   | `/predict/camera`       | Captura foto na câmera física (CSI ou USB) e retorna detecções em JSON.   |
+| `GET`    | `/predict/camera/image` | Captura foto na câmera física e retorna imagem JPEG anotada com bboxes.   |
+| `GET`    | `/stream/camera`        | Transmite feed contínuo de vídeo MJPEG com detecções desenhadas nos frames.|
+| `GET`    | `/stream/view`          | Página HTML interativa para visualização do streaming no navegador.       |
+| `POST`   | `/predict/batch`        | Processa múltiplas imagens Base64 em lote retornando detecções e tempo.   |
+
+Documentação interativa Swagger UI disponível em `/docs` e ReDoc em `/redoc`.
+
+- - -
+
+## Como rodar localmente
+
+### Requisitos
+
+- Python 3.11+
+- Git
+- Docker e Docker Compose
+- DVC (para sincronização de pesos e datasets)
+
+### Instalar dependências
+
+```bash
+python -m venv .venv
+# Ativar o ambiente virtual:
+# Linux/macOS: source .venv/bin/activate
+# Windows: .venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
 ```
 
-### 4. Conectar o runner do GitHub à rede do seu Pi (Tailscale)
-O Pi normalmente só tem um IP privado (`192.168.x.x`), inacessível a partir dos runners do
-GitHub Actions (que rodam na nuvem). Instale o Tailscale no Pi e gere uma auth key
-**Reusable + Ephemeral** em `login.tailscale.com/admin/settings/keys`:
+### Sincronizar modelo e pesos
+
 ```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-tailscale ip -4     # anote o IP 100.x.y.z — é esse que vai no secret RPI_HOST
+dvc pull
 ```
 
-### 5. Configurar os Secrets no GitHub
-Em `Settings → Secrets and variables → Actions` do repositório, crie:
+### Iniciar ambiente de desenvolvimento
 
-| Secret | Valor |
-|---|---|
-| `RPI_HOST` | IP Tailscale do Pi (`100.x.y.z`) |
-| `RPI_USER` | usuário SSH do Pi |
-| `RPI_SSH_KEY` | conteúdo da chave **privada** `~/.ssh/rpi_deploy` |
-| `RPI_DEPLOY_PATH` | caminho do projeto no Pi, ex. `/home/pi/yolo-edge-api` |
-| `TAILSCALE_AUTHKEY` | a auth key gerada no passo 4 |
-
-Também habilite `Settings → Actions → General → Workflow permissions → Read and write
-permissions`.
-
-### 6. Ajustar o `docker-compose.yml`
-Troque `seu_usuario_em_minusculo` em `docker-compose.yml` pelo seu usuário do GitHub, **em
-minúsculo** (exigência do formato de nome de imagem OCI, mesmo que seu usuário do GitHub
-tenha maiúsculas):
-```yaml
-image: ghcr.io/<seu-usuario-minusculo>/yolo-edge-api/yolo-api:latest
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 7. Rodar os testes localmente antes do primeiro push
-No Raspberry Pi (ou em qualquer máquina Linux com o modelo em `models/yolov8n.pt`):
+Ou utilizando Docker Compose:
+
 ```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu --break-system-packages
-pip install -r app/requirements.txt pytest ruff --break-system-packages
+docker compose up -d yolo-api
+```
 
-sudo mkdir -p /app && sudo ln -sfn "$(pwd)/models" /app/models   # mesmo path do container
+A aplicação fica disponível em `http://localhost:8000` (documentação interativa em `http://localhost:8000/docs`).
 
-ruff check app/ --fix
+- - -
+
+## Scripts úteis
+
+| Script                                | Descrição                                                   |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `uvicorn app.main:app --reload`       | Inicia a API com recarregamento automático em desenvolvimento. |
+| `docker compose up -d`                | Inicia os containers da API, cliente e streaming.           |
+| `docker compose logs -f yolo-api`     | Exibe os logs estruturados da API em tempo real.            |
+| `docker compose down`                 | Interrompe e remove os containers locais.                   |
+| `dvc pull`                            | Baixa pesos do modelo e datasets a partir do remote DVC.    |
+| `pytest tests/ -v`                    | Executa a suíte de testes automatizados com relatório detalhado. |
+| `ruff check app/`                     | Valida regras de lint e boas práticas no código da aplicação. |
+| `python scripts/validate_model.py`    | Executa o Quality Gate avaliando o limiar de mAP@0.5 do modelo. |
+| `bash scripts/deploy.sh`              | Executa deploy com pull da imagem e rollback automático se falhar. |
+| `python train_epi.py`                 | Inicia o fine-tuning do modelo YOLOv8 para detecção de EPIs. |
+| `python stream/mjpeg_server.py`       | Inicia o servidor dedicado de streaming de vídeo MJPEG.     |
+
+- - -
+
+## Testes
+
+O projeto usa Pytest para testes automatizados. A suíte cobre integridade de endpoints, funções isoladas, decodificação de imagens, pipelines de pré-processamento e o fluxo completo de inferência:
+
+1. Verificação de status e saúde do serviço (`/health`).
+2. Consulta de métricas operacionais (`/metrics`).
+3. Decodificação de imagem em Base64 e validação de dimensões e canais.
+4. Redimensionamento via Letterbox e correção geométrica de bboxes.
+5. Inferência com imagem de referência (`zidane.jpg`), validando detecções e formato do payload.
+6. Inferência em lote (`/predict/batch`) e tratamento de erros para entradas inválidas.
+
+Para executar:
+
+```bash
 pytest tests/ -v
-# Esperado: 14 passed
 ```
 
-### 8. Clonar no Raspberry Pi e apontar para a imagem do registry
-No Pi, clone o repositório (não a partir deste monorepo — do seu `origin` no GitHub) para o
-caminho definido em `RPI_DEPLOY_PATH`, e garanta que `docker`, `docker compose` e `git`
-estão instalados e que o usuário tem permissão para rodar Docker.
+- - - 
 
-### 9. Disparar e acompanhar o pipeline
-```bash
-git push origin main
-```
-Acompanhe em `github.com/<seu-usuario>/yolo-edge-api` → aba **Actions**. Os quatro jobs devem
-ficar verdes em sequência: Lint & Tests → Build & Push → Model Quality Gate → Deploy.
+## Documentação
 
-### 10. Validar no Pi e testar o rollback
-```bash
-docker compose ps                                   # imagem com tag sha-<commit> rodando
-curl http://localhost:8000/health | python3 -m json.tool   # model_loaded: true
-docker compose logs --tail=10 yolo-api | jq .        # eventos estruturados (predict_complete)
-```
-Para provar o rollback automático, force um health check quebrado
-(`docker compose run --rm -e MODEL_NAME=modelo_inexistente.pt yolo-api &`) e rode
-`DEPLOY_PATH=~/yolo-edge-api bash scripts/deploy.sh` manualmente — ele deve detectar a falha
-e reverter para a imagem anterior sozinho.
+O conteúdo teórico e os estudos práticos do projeto estão organizados em diretórios dedicados:
 
-## Checklist de validação (do material da disciplina)
+- [`apostilas/`](./apostilas/): Material didático da disciplina (Aulas 1 a 6), contendo fundamentos de visão computacional, conteinerização Docker, MLOps, CI/CD, Tailscale e arquiteturas Edge AI.
+- [`preprocessing/experiments/TABELA.md`](./preprocessing/experiments/TABELA.md): Tabela consolidada com resultados e benchmarks empíricos de pré-processamento (espaço de cor BGR vs RGB, letterbox, filtros de ruído e equalização adaptativa CLAHE para baixa luminosidade).
 
-- [ ] `pytest tests/ -v` reporta `14 passed, 0 failed`
-- [ ] `dvc push` executado com sucesso; `models/yolov8n.pt.dvc` commitado
-- [ ] Os 4 jobs da aba Actions concluídos com sucesso
-- [ ] `docker compose ps` no Pi mostra `yolo-api` rodando com a imagem mais recente
-- [ ] `curl http://localhost:8000/health` retorna `model_loaded: true`
-- [ ] `docker compose logs --tail=10 yolo-api | jq .` mostra eventos JSON estruturados
+## Roadmap
+
+### Milestone 1: API REST & Containerização
+- [x] Criação dos endpoints de inferência `/predict`, `/predict/batch` e `/health`.
+- [x] Suporte a imagens via Base64 e URL externa.
+- [x] Dockerfile com PyTorch CPU-only otimizado para ARM64.
+- [x] Orquestração local com Docker Compose (`yolo-api`, `yolo-client`).
+
+### Milestone 2: MLOps, CI/CD & Deploy Contínuo
+- [x] Versionamento de pesos via DVC desacoplado do Git.
+- [x] Pipeline automatizado no GitHub Actions com 4 jobs sequenciais.
+- [x] Quality Gate de modelo bloqueando builds com `mAP@0.5 < 0.60`.
+- [x] Conexão segura via Tailscale VPN para comunicação direta com o Raspberry Pi 5.
+- [x] Deploy automatizado via SSH com health check e rollback autônomo.
+
+### Milestone 3: Câmera Física, Streaming & Otimizações
+- [x] Endpoints de captura em câmera física CSI/USB (`/predict/camera` e `/predict/camera/image`).
+- [x] Servidor de streaming MJPEG de baixa latência (`/stream/camera` e `/stream/view`).
+- [x] Módulo de pré-processamento com Letterbox e mapeamento inverso de coordenadas.
+- [x] Equalização CLAHE para ambientes de baixa iluminação.
+- [x] Dataset e script de treinamento para detecção de EPIs (`train_epi.py`).
+
+### Milestone 4: Próximos Passos
+- [ ] Exportação e quantização de modelos para INT8 via ONNX Runtime / NCNN.
+- [ ] Exportador de métricas Prometheus e dashboards de telemetria no Grafana.
+- [ ] Pipeline de retraining contínuo a partir de detecções de baixa confiança em campo.
+- [ ] Suporte a múltiplos fluxos de câmera simultâneos com aceleração V4L2.
