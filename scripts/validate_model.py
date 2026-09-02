@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 scripts/validate_model.py
 Quality gate: bloqueia o deploy se o mAP@0.5 estiver abaixo do limiar.
@@ -37,7 +38,7 @@ def main():
         print(f"[INFO] Validando com dataset: {args.dataset}")
         metrics = model.val(data=args.dataset, split="val", verbose=False)
     else:
-        # Validação rápida com COCO128 (dataset embutido no ultralytics)
+        # Validação rápida com COCO128 (dataset padrão)
         print("[INFO] Validando com COCO128 (dataset padrão)")
         metrics = model.val(data="coco128.yaml", split="val", verbose=False)
 

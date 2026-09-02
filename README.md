@@ -242,6 +242,8 @@ docker compose down
 | `dvc pull`                                  | Baixa pesos do modelo e datasets a partir do storage remoto DVC.               |
 | `pytest tests/ -v`                          | Executa a suíte de testes automatizados com relatório detalhado.               |
 | `ruff check .`                              | Valida regras de lint e boas práticas em todo o repositório.                   |
+| `ruff check --fix .`                        | Aplica correções automáticas seguras de estilo e código.                       |
+| `ruff format .`                             | Formata todos os arquivos do projeto segundo a PEP 8.                          |
 | `bash scripts/deploy.sh`                    | Executa deploy com pull da imagem e rollback automático se falhar.             |
 
 - - -
@@ -279,6 +281,25 @@ pytest -m integration
 # Executar com relatório de cobertura de código
 pytest --cov=app --cov=preprocessing --cov-report=term-missing
 ```
+
+- - -
+
+## Qualidade de Código (Lint & Formatação com Ruff)
+
+O projeto adota o **Ruff**, linter e formatador de código Python ultrarrápido escrito em Rust, configurado através do [`ruff.toml`](./ruff.toml):
+
+```bash
+# Executar inspeção estática no repositório
+ruff check .
+
+# Aplicar correções automáticas seguras
+ruff check --fix .
+
+# Formatar o código (indentação, quebras e aspas)
+ruff format .
+```
+
+O linter faz parte do primeiro estágio do pipeline de CI (`edge-deploy.yml`), garantindo que nenhum commit com erros de sintaxe ou violações de boas práticas avance para os jobs de Quality Gate e Deploy.
 
 - - - 
 
