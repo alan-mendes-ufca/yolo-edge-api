@@ -166,7 +166,7 @@ def parse_args():
     p.add_argument("--width", type=int, default=640)
     p.add_argument("--height", type=int, default=480)
     p.add_argument("--fps", type=int, default=30)
-    p.add_argument("--model", type=str, default="models/yolov8n.pt")
+    p.add_argument("--model", type=str, default="models/yolo-epi.pt")
     p.add_argument("--conf", type=float, default=0.4)
     p.add_argument("--frames", type=int, default=100)
     return p.parse_args()
@@ -188,7 +188,7 @@ def main():
         if frame is None:
             print("[AVISO] Timeout na leitura do frame.")
             continue
-        annotated, n_det, infer_ms = yolo.run(frame)
+        _annotated, n_det, infer_ms = yolo.run(frame)
         frame_count += 1
         elapsed_total = time.perf_counter() - t_start
         fps_avg = frame_count / elapsed_total if elapsed_total > 0 else 0

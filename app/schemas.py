@@ -13,7 +13,7 @@ class PredictRequest(BaseModel):
     )
     confidence: float = Field(0.25, ge=0.0, le=1.0,
         description="Limiar mínimo de confiança (0–1)")
-    model_name: str = Field("yolov8n.pt",
+    model_name: str = Field("yolo-epi.pt",
         description="Nome do arquivo de pesos dentro de /app/models/")
 
 
@@ -34,7 +34,7 @@ class PredictResponse(BaseModel):
 class BatchPredictRequest(BaseModel):
     images_base64: list[str]
     confidence: float = 0.25
-    model_name: str = "yolov8n.pt"
+    model_name: str = "yolo-epi.pt"
 
 
 class BatchPredictResponse(BaseModel):

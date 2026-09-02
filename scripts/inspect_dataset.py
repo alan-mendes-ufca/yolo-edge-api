@@ -2,7 +2,7 @@
 """
 scripts/inspect_dataset.py
 Valida a integridade e balanceamento de um dataset no formato YOLOv8.
-Uso: python scripts/inspect_dataset.py --dataset dataset/exports/epi-v1/data.yaml
+Uso: python scripts/inspect_dataset.py [--dataset dataset/epi-detection/data.yaml]
 """
 import argparse
 import sys
@@ -14,7 +14,11 @@ import yaml
 
 def parse_args():
     p = argparse.ArgumentParser(description="Inspeciona integridade do dataset YOLOv8")
-    p.add_argument("--dataset", required=True, help="Caminho para data.yaml")
+    p.add_argument(
+        "--dataset",
+        default="dataset/epi-detection/data.yaml",
+        help="Caminho para data.yaml (padrão: dataset/epi-detection/data.yaml)",
+    )
     p.add_argument(
         "--min-per-class",
         type=int,
@@ -25,7 +29,7 @@ def parse_args():
 
 
 def load_yaml(path: str) -> dict:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -40,7 +44,7 @@ def count_labels(labels_dir: Path, num_classes: int) -> dict:
         if not label_path.exists():
             missing += 1
             continue
-        with open(label_path) as f:
+        with open(label_path, encoding="utf-8") as f:
             for line in f:
                 parts = line.strip().split()
                 if not parts:
@@ -51,11 +55,23 @@ def count_labels(labels_dir: Path, num_classes: int) -> dict:
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     args = parse_args()
     cfg = load_yaml(args.dataset)
     base = Path(args.dataset).parent
     names = cfg.get("names", [])
     nc = cfg.get("nc", len(names))
+
+    block_char = "█"
+    try:
+        block_char.encode(sys.stdout.encoding or "utf-8")
+    except Exception:
+        block_char = "#"
 
     print(f"\n{'='*55}")
     print(f" Inspeção do Dataset: {Path(args.dataset).parent.name}")
@@ -85,7 +101,7 @@ def main():
         )
         for cls_id, cls_name in enumerate(names):
             n = counts.get(cls_id, 0)
-            bar = "█" * min(int(n / max(total, 1) * 30), 30)
+            bar = block_char * min(int(n / max(total, 1) * 30), 30)
             warn = (
                 "  ← ABAIXO DO MÍNIMO"
                 if split == "train" and n < args.min_per_class

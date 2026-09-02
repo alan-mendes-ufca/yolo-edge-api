@@ -175,7 +175,7 @@ class RealtimeDetector:
             self._last_boxes = []
             for r in results:
                 for box in r.boxes:
-                    bbox_lb = box.xyxy[0].numpy().reshape(1, 4)
+                    bbox_lb = box.xyxy[0].cpu().numpy().reshape(1, 4)
                     x1, y1, x2, y2 = self.preprocessor.adjust_boxes(bbox_lb, preproc_result)[0]
                     label = self.model.names[int(box.cls[0])]
                     conf = float(box.conf[0])
@@ -242,7 +242,7 @@ def parse_args():
     p.add_argument("--width", type=int, default=640)
     p.add_argument("--height", type=int, default=480)
     p.add_argument("--fps", type=int, default=30)
-    p.add_argument("--model", type=str, default="models/yolov8n.pt")
+    p.add_argument("--model", type=str, default="models/yolo-epi.pt")
     p.add_argument("--conf", type=float, default=0.4)
     p.add_argument(
         "--infer-every",

@@ -1,6 +1,6 @@
 # Tabela de Resultados dos Experimentos de Pré-processamento
 
-Resultados obtidos a partir da execução dos scripts contidos em [`preprocessing/experiments`](preprocessing/experiments) utilizando o modelo YOLOv8n e o dataset de detecção de EPIs (`epi-v1` e `epi-v1-dark`).
+Resultados obtidos a partir da execução dos scripts contidos em [`preprocessing/experiments`](preprocessing/experiments) utilizando o modelo YOLOv8 e o dataset de detecção de EPIs (`epi-detection` e `epi-detection-dark`).
 
 ---
 

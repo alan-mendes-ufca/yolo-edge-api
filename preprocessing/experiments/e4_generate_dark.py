@@ -1,6 +1,6 @@
 """
 Gera versões escuras das imagens de validação para testar equalização.
-Salva em dataset/exports/epi-v1-dark/ mantendo os labels originais.
+Salva em dataset/epi-detection-dark/ mantendo os labels originais.
 """
 import shutil
 from pathlib import Path
@@ -9,8 +9,8 @@ import cv2
 import numpy as np
 import yaml
 
-SRC = Path("dataset/exports/epi-v1/valid")
-DEST = Path("dataset/exports/epi-v1-dark/valid")
+SRC = Path("dataset/epi-detection/valid")
+DEST = Path("dataset/epi-detection-dark/valid")
 (DEST / "images").mkdir(parents=True, exist_ok=True)
 (DEST / "labels").mkdir(parents=True, exist_ok=True)
 
@@ -30,17 +30,17 @@ for img_path in sorted(list((SRC / "images").glob("*.jpg")) + list((SRC / "image
 dark_count = len(list((DEST / "images").glob("*.*")))
 print(f"Geradas {dark_count} imagens escurecidas")
 
-# Cria data.yaml para epi-v1-dark
-with open("dataset/exports/epi-v1/data.yaml") as f:
+# Cria data.yaml para epi-detection-dark
+with open("dataset/epi-detection/data.yaml", encoding="utf-8") as f:
     base = yaml.safe_load(f)
 
 dark_cfg = {
-    "path": str(Path("dataset/exports/epi-v1-dark").resolve()),
+    "path": str(Path("dataset/epi-detection-dark").resolve()),
     "train": "valid/images",
     "val": "valid/images",
     "test": "valid/images",
     "names": base.get("names", ["Capacete", "Colete", "Pessoa"]),
 }
-with open("dataset/exports/epi-v1-dark/data.yaml", "w") as f:
+with open("dataset/epi-detection-dark/data.yaml", "w", encoding="utf-8") as f:
     yaml.safe_dump(dark_cfg, f)
-print("data.yaml criado em dataset/exports/epi-v1-dark/")
+print("data.yaml criado em dataset/epi-detection-dark/")

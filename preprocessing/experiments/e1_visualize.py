@@ -3,9 +3,9 @@ from pathlib import Path
 
 import cv2
 
-img_paths = sorted(Path("dataset/exports/epi-v1/valid/images").glob("*.jpg"))
+img_paths = sorted(Path("dataset/epi-detection/valid/images").glob("*.jpg"))
 if not img_paths:
-    img_paths = sorted(Path("dataset/exports/epi-v1/valid/images").glob("*.*"))
+    img_paths = sorted(Path("dataset/epi-detection/valid/images").glob("*.*"))
 img_path = img_paths[0]
 frame = cv2.imread(str(img_path))
 bgr_display = frame.copy()                            # BGR — azul parece vermelho

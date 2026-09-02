@@ -39,7 +39,7 @@ def run_single_inference(image_path: Path, confidence: float = 0.25):
     payload = {
         "image_base64": encode_image(image_path),
         "confidence": confidence,
-        "model_name": "yolov8n.pt",
+        "model_name": os.getenv("MODEL_NAME", "yolo-epi.pt"),
     }
     response = httpx.post(
         f"{API_URL}/predict",
@@ -67,6 +67,7 @@ def run_batch_inference(image_paths: list, confidence: float = 0.25):
     payload = {
         "images_base64": [encode_image(p) for p in image_paths],
         "confidence": confidence,
+        "model_name": os.getenv("MODEL_NAME", "yolo-epi.pt"),
     }
     response = httpx.post(
         f"{API_URL}/predict/batch",

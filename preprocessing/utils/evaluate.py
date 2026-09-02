@@ -1,6 +1,6 @@
 """
 preprocessing/utils/evaluate.py
-Avalia o mAP@0.5 de um pipeline de pré-processamento no dataset epi-v1.
+Avalia o mAP@0.5 de um pipeline de pré-processamento no dataset epi-detection.
 Recebe uma função de pré-processamento e retorna as métricas.
 """
 import shutil
@@ -25,8 +25,8 @@ def _patched_torch_load(*args, **kwargs):
 
 torch.load = _patched_torch_load
 
-DATASET_YAML = "dataset/exports/epi-v1/data.yaml"
-MODEL_PATH = "models/yolov8n.pt"
+DATASET_YAML = "dataset/epi-detection/data.yaml"
+MODEL_PATH = "models/yolo-epi.pt"
 
 
 def evaluate_pipeline(

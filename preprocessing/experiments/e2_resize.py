@@ -25,9 +25,9 @@ def preproc_letterbox(frame: np.ndarray) -> np.ndarray:
 
 # ── Demonstração visual do ajuste de coordenadas ─────────────────
 def demo_bbox_adjustment():
-    img_paths = sorted(Path("dataset/exports/epi-v1/valid/images").glob("*.jpg"))
+    img_paths = sorted(Path("dataset/epi-detection/valid/images").glob("*.jpg"))
     if not img_paths:
-        img_paths = sorted(Path("dataset/exports/epi-v1/valid/images").glob("*.*"))
+        img_paths = sorted(Path("dataset/epi-detection/valid/images").glob("*.*"))
     img_path = img_paths[0]
     frame    = cv2.imread(str(img_path))
     h_orig, w_orig = frame.shape[:2]
