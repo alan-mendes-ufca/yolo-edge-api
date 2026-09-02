@@ -19,14 +19,15 @@ print("GPU:", torch.cuda.get_device_name(0))
 from ultralytics import YOLO
 
 if __name__ == "__main__":
-    model = YOLO("yolov8n.pt")
+    model = YOLO("models/yolov8n.pt")
     results = model.train(
-        data="dataset/exports/epi-v1/data.yaml",
+        data="dataset/epi-detection/data.yaml",
         epochs=100,
         imgsz=640,
         device=0,
         patience=20,
         project="runs",
-        name="epi-v1",
+        name="epi-detection",
     )
     print("Pesos salvos em:", results.save_dir)
+# %%
