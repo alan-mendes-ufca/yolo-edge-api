@@ -30,4 +30,11 @@ if __name__ == "__main__":
         name="epi-detection",
     )
     print("Pesos salvos em:", results.save_dir)
-# %%
+
+    # Copia automaticamente o melhor peso para models/yolo-epi.pt
+    best_pt = Path(results.save_dir) / "weights" / "best.pt"
+    if best_pt.exists():
+        dest = Path("models/yolo-epi.pt")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(best_pt, dest)
+        print(f"[OK] Modelo promovido com sucesso para: {dest}")
