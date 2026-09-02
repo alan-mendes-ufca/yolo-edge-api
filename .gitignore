@@ -1,5 +1,6 @@
 # dataset
 dataset/epi-detection/
+dataset/epi-detection-dark/
 
 
 # Pesos do modelo (gerenciados pelo DVC)
@@ -19,6 +20,9 @@ dataset/annotated/*
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 .venv/
 
 # Imagens de teste grandes
