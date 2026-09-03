@@ -26,6 +26,15 @@ echo "[INFO] Imagem atual: $PREVIOUS"
 echo "[1/4] Baixando nova imagem..."
 docker compose pull
 
+# ── Atualiza modelos via DVC ─────────────────────────────────
+if [ -f ".venv/bin/dvc" ]; then
+    echo "[INFO] Atualizando modelos via DVC (.venv)..."
+    .venv/bin/dvc pull models/ || echo "[AVISO] Falha ao executar dvc pull"
+elif command -v dvc >/dev/null 2>&1; then
+    echo "[INFO] Atualizando modelos via DVC..."
+    dvc pull models/ || echo "[AVISO] Falha ao executar dvc pull"
+fi
+
 # ── Sobe a nova versão ───────────────────────────────────────
 echo "[2/4] Iniciando nova versão..."
 docker compose up -d

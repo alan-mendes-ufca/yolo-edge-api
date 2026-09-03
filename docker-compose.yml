@@ -17,6 +17,7 @@ services:
       - ./models:/app/models:ro  # Pesos somente-leitura
       - ./output:/app/output     # Resultados gravados aqui
       - ./images:/app/images:ro  # Imagens de teste
+      - ./preprocessing:/app/preprocessing:ro  # Módulo de pré-processamento
       - /dev:/dev                # Mapeia dispositivos de hardware do host
       - /run/udev:/run/udev:ro   # Permite ao libcamera identificar o sensor via udev
     environment:
@@ -56,6 +57,7 @@ services:
     privileged: true              # Mesmo acesso à câmera do yolo-api
     volumes:
       - ./stream:/app/stream        # Código do módulo de streaming
+      - ./preprocessing:/app/preprocessing:ro  # Módulo de pré-processamento
       - ./models:/app/models:ro     # Pesos do modelo (read-only)
       - /dev:/dev                   # Dispositivos de hardware do host
       - /run/udev:/run/udev:ro      # Permite ao libcamera identificar o sensor via udev
