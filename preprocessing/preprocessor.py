@@ -125,14 +125,15 @@ class Preprocessor:
 # ── Configurações pré-definidas ───────────────────────────────────
 CONFIG_DEFAULT = PreprocessConfig(
     infer_size=320,
-    convert_rgb=True,
+    # Ultralytics espera arrays NumPy em BGR e converte para RGB internamente.
+    convert_rgb=False,
     use_letterbox=True,
     gaussian_blur=False,
     clahe=False,
 )
 CONFIG_LOW_LIGHT = PreprocessConfig(
     infer_size=320,
-    convert_rgb=True,
+    convert_rgb=False,
     use_letterbox=True,
     clahe=True,
     clahe_clip=2.0,
@@ -141,7 +142,7 @@ CONFIG_LOW_LIGHT = PreprocessConfig(
 )
 CONFIG_HIGH_QUALITY = PreprocessConfig(
     infer_size=640,
-    convert_rgb=True,
+    convert_rgb=False,
     use_letterbox=True,
     gaussian_blur=False,
     clahe=False,

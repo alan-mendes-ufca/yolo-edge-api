@@ -146,6 +146,19 @@ class TestPreprocessorConfigs:
         assert not pp.cfg.median_blur
         assert not pp.cfg.clahe
 
+    def test_inference_configs_preserve_bgr_channel_order(self):
+        """Presets usados com Ultralytics devem entregar arrays NumPy em BGR."""
+        frame_bgr = np.zeros((320, 320, 3), dtype=np.uint8)
+        frame_bgr[:, :, 0] = 255
+
+        for config in (CONFIG_DEFAULT, CONFIG_LOW_LIGHT, CONFIG_HIGH_QUALITY):
+            assert config.convert_rgb is False
+            result = Preprocessor(config).process(frame_bgr)
+            center_y = result.frame.shape[0] // 2
+            center_x = result.frame.shape[1] // 2
+            center_pixel = result.frame[center_y, center_x]
+            assert center_pixel[0] > center_pixel[2]
+
     def test_config_high_quality(self):
         pp = Preprocessor(CONFIG_HIGH_QUALITY)
         assert pp.cfg.infer_size == 640

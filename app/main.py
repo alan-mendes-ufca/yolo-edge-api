@@ -114,11 +114,11 @@ def _capture_frame_from_camera(device_id: int = 0) -> np.ndarray:
 def _run_inference(image_np: np.ndarray, model_name: str, confidence: float) -> PredictResponse:
     model = load_model(model_name)
     # Pré-processamento explícito
-    # image_np chega em RGB (já convertido em _decode_image) --
-    # o Preprocessor espera BGR, então converte temporariamente
+    # image_np chega em RGB (já convertido em _decode_image). O Ultralytics
+    # interpreta arrays NumPy como BGR e faz a conversão para RGB internamente.
     frame_bgr = image_np[:, :, ::-1]
     preproc_res = _preprocessor.process(frame_bgr)
-    frame_ready = preproc_res.frame  # RGB, letterboxed
+    frame_ready = preproc_res.frame  # BGR, letterboxed
     t0 = time.perf_counter()
     results = model(frame_ready, conf=confidence, verbose=False)
     elapsed_ms = (time.perf_counter() - t0) * 1000
